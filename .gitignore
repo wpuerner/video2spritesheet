@@ -1,0 +1,6 @@
+output/*
+testdata/*
+bin/*
+lib/*
+lib64
+share/*
