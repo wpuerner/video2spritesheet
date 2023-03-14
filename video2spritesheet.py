@@ -1,21 +1,32 @@
 import cv2 as cv
 import imutils
 import fire
+import time
 
 
 class Video2Spritesheet:
-    def process(self, input, output, debug=False):
-        cap = cv.VideoCapture('testdata/' + input)
+    def process(self, ifile, ofile, startframe=0, endframe=-1, preview=False, debug=False):
+        cap = cv.VideoCapture('testdata/' + ifile)
+        if endframe == -1:
+            endframe = cap.get(cv.CAP_PROP_FRAME_COUNT) - 1
         height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
 
         owidth = 800
         oheight = height
-        output = cv.VideoWriter("output/" + output,
-                                cv.VideoWriter_fourcc(*'mp4v'), 20.0, (owidth, oheight))
+
         fgbg = cv.bgsegm.createBackgroundSubtractorMOG()
 
-        while (1):
+        frames = []
+        while True:
+            if cap.get(cv.CAP_PROP_POS_FRAMES) < startframe:
+                cap.read()
+                continue
+            if endframe < cap.get(cv.CAP_PROP_POS_FRAMES):
+                break
+
             ret, frame = cap.read()
+            if frame is None:
+                break
 
             fgmask = fgbg.apply(frame)
             frame = cv.bitwise_and(frame, frame, mask=fgmask)
@@ -42,7 +53,6 @@ class Video2Spritesheet:
                                     for point in points]) / sum([point['area'] for point in points])),
                       'y': int(sum([point['y'] * point['area']
                                     for point in points]) / sum([point['area'] for point in points]))}
-            points.clear()
             if debug:
                 cv.circle(
                     frame, (center['x'], center['y']), 20, (0, 0, 255), -1)
@@ -50,19 +60,38 @@ class Video2Spritesheet:
             frame = cv.copyMakeBorder(frame, 0, 0, int(owidth/2), int(owidth/2),
                                       cv.BORDER_CONSTANT, value=[0, 0, 0])
             center['x'] = center['x'] + int(owidth/2)
-            crop = frame[0:oheight, int(
+            frame = frame[0:oheight, int(
                 center['x']-owidth/2):int(center['x']+owidth/2)]
 
-            output.write(crop)
-            if debug:
-                cv.imshow('frame', crop)
-            k = cv.waitKey(30) & 0xff
-            if k == 27:
-                break
+            frames.append(frame)
+
+        if preview:
+            i = 0
+            while True:
+                cv.imshow("Preview", frames[i])
+                cv.waitKey(100)
+                i = i + 1
+                if i == len(frames):
+                    i = 0
+
+        if not preview:
+            output = cv.VideoWriter("output/" + ofile,
+                                    cv.VideoWriter_fourcc(*'mp4v'), 20.0, (owidth, oheight))
+            for frame in frames:
+                output.write(frame)
+            output.release()
 
         cap.release()
-        output.release()
         cv.destroyAllWindows()
+
+    def info(self, input):
+        cap = cv.VideoCapture('testdata/' + input)
+        print("=== Video Settings for ", input, "===")
+        print("Width      ", cap.get(cv.CAP_PROP_FRAME_WIDTH))
+        print("Height     ", cap.get(cv.CAP_PROP_FRAME_HEIGHT))
+        print("Frames     ", cap.get(cv.CAP_PROP_FRAME_COUNT))
+        print("FPS        ", cap.get(cv.CAP_PROP_FPS))
+        cap.release()
 
 
 if __name__ == '__main__':
