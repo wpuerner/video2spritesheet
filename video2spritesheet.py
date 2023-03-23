@@ -4,6 +4,7 @@ import fire
 import threading
 from tkinter import *
 import sys
+import time
 
 mutations = {
     'scale': 1,
@@ -16,8 +17,6 @@ exit_app = False
 
 class Video2Spritesheet:
     def process(self, ifile, ofile, debug=False):
-        gui = threading.Thread(target=self.gui, name='gui')
-        gui.start()
 
         cap = cv.VideoCapture('testdata/' + ifile)
 
@@ -73,6 +72,12 @@ class Video2Spritesheet:
 
         cap.release()
 
+        gui = threading.Thread(target=self.gui, args=[len(frames)], name='gui')
+        gui.start()
+
+        # wait for the gui to initialize globals
+        time.sleep(3)
+
         i = 0
         while True:
             if save:
@@ -80,22 +85,26 @@ class Video2Spritesheet:
             if exit_app:
                 cv.destroyAllWindows()
                 sys.exit()
+            if i < start_frame.get():
+                i = start_frame.get()
 
             frame = frames[i]
 
             frame = cv.convertScaleAbs(
-                frame, alpha=mutations['contrast'], beta=mutations['brightness'])
+                frame, alpha=contrast.get(), beta=brightness.get())
 
-            fwidth = int(frame.shape[1] * mutations['scale'])
-            fheight = int(frame.shape[0] * mutations['scale'])
+            fwidth = int(frame.shape[1] * scale.get())
+            fheight = int(frame.shape[0] * scale.get())
             dim = (fwidth, fheight)
             frame = cv.resize(frame, dim, interpolation=cv.INTER_AREA)
+            cv.rectangle(frame, (sprite_pos_x.get(), sprite_pos_y.get()), (sprite_pos_x.get(
+            )+sprite_size.get(), sprite_pos_y.get()+sprite_size.get()), color=(0, 0, 255), thickness=1)
 
             cv.imshow("Preview", cv.resize(
                 frame, (owidth, oheight), interpolation=cv.INTER_NEAREST))
             cv.waitKey(30)
             i = i + 1
-            if i == len(frames):
+            if i == len(frames) or i > end_frame.get():
                 i = 0
 
         output = cv.VideoWriter("output/" + ofile,
@@ -115,11 +124,7 @@ class Video2Spritesheet:
         print("FPS        ", cap.get(cv.CAP_PROP_FPS))
         cap.release()
 
-    def gui(self):
-        def update():
-            mutations['scale'] = scale.get()
-            mutations['contrast'] = contrast.get()
-            mutations['brightness'] = brightness.get()
+    def gui(self, frames_length):
 
         def save():
             global save
@@ -131,23 +136,58 @@ class Video2Spritesheet:
             exit_app = True
 
         root = Tk()
+
         frame = Frame(root)
         frame.pack()
 
-        scale = Scale(root, from_=0.05, to=1.0, resolution=0.01,
-                      label="Scale", orient=HORIZONTAL)
+        global scale
+        scale = DoubleVar()
         scale.set(1.0)
-        scale.pack()
-        contrast = Scale(root, from_=0.0, to=3.0, resolution=0.01,
-                         label="Contrast", orient=HORIZONTAL)
-        contrast.set(1.0)
-        contrast.pack()
-        brightness = Scale(root, from_=-127, to=127,
-                           label="Brightness", orient=HORIZONTAL)
-        brightness.set(0)
-        brightness.pack()
+        Scale(root, from_=0.05, to=1.0, resolution=0.01,
+              label="Scale", orient=HORIZONTAL, variable=scale, length=500).pack()
 
-        Button(root, text="update", command=update).pack()
+        global brightness
+        brightness = IntVar()
+        brightness.set(0)
+        Scale(root, from_=-127, to=127,
+              label="Brightness", orient=HORIZONTAL, variable=brightness, length=500).pack()
+
+        global contrast
+        contrast = DoubleVar()
+        contrast.set(1.0)
+        Scale(root, from_=0.0, to=3.0, resolution=0.01,
+              label="Contrast", orient=HORIZONTAL, variable=contrast, length=500).pack()
+
+        global sprite_size
+        sprite_size = IntVar()
+        sprite_size.set(8)
+        Scale(root, from_=4, to=128, label="Sprite Size",
+              orient=HORIZONTAL, variable=sprite_size, length=500).pack()
+
+        global sprite_pos_x
+        sprite_pos_x = IntVar()
+        sprite_pos_x.set(0)
+        Scale(root, from_=0, to=800, label="Sprite Pos X",
+              orient=HORIZONTAL, variable=sprite_pos_x, length=500).pack()
+
+        global sprite_pos_y
+        sprite_pos_y = IntVar()
+        sprite_pos_y.set(0)
+        Scale(root, from_=0, to=800, label="Sprite Pos Y",
+              orient=HORIZONTAL, variable=sprite_pos_y, length=500).pack()
+
+        global start_frame
+        start_frame = IntVar()
+        start_frame.set(0)
+        Scale(root, from_=0, to=frames_length-2, label="Start Frame",
+              orient=HORIZONTAL, variable=start_frame, length=500).pack()
+
+        global end_frame
+        end_frame = IntVar()
+        end_frame.set(frames_length-1)
+        Scale(root, from_=1, to=frames_length-1, label="End Frame",
+              orient=HORIZONTAL, variable=end_frame, length=500).pack()
+
         Button(root, text="Save", command=save).pack()
         Button(root, text="Exit", command=exit).pack()
 
