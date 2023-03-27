@@ -16,7 +16,20 @@ exit_app = False
 
 
 class Video2Spritesheet:
-    def process(self, ifile, ofile, debug=False):
+
+    def mutate(self, frame):
+        # there is an issue with color correction that affects the alpha channel
+        frame = cv.convertScaleAbs(
+            frame, alpha=contrast.get(), beta=brightness.get())
+
+        fwidth = int(frame.shape[1] * scale.get())
+        fheight = int(frame.shape[0] * scale.get())
+        dim = (fwidth, fheight)
+        frame = cv.resize(frame, dim, interpolation=cv.INTER_AREA)
+
+        return frame
+
+    def process(self, ifile, name, debug=False):
 
         cap = cv.VideoCapture('testdata/' + ifile)
 
@@ -34,6 +47,7 @@ class Video2Spritesheet:
                 break
 
             fgmask = fgbg.apply(frame)
+            frame = cv.cvtColor(frame, cv.COLOR_BGR2BGRA)
             frame = cv.bitwise_and(frame, frame, mask=fgmask)
 
             points = []
@@ -88,15 +102,8 @@ class Video2Spritesheet:
             if i < start_frame.get():
                 i = start_frame.get()
 
-            frame = frames[i]
+            frame = self.mutate(frames[i])
 
-            frame = cv.convertScaleAbs(
-                frame, alpha=contrast.get(), beta=brightness.get())
-
-            fwidth = int(frame.shape[1] * scale.get())
-            fheight = int(frame.shape[0] * scale.get())
-            dim = (fwidth, fheight)
-            frame = cv.resize(frame, dim, interpolation=cv.INTER_AREA)
             cv.rectangle(frame, (sprite_pos_x.get(), sprite_pos_y.get()), (sprite_pos_x.get(
             )+sprite_size.get(), sprite_pos_y.get()+sprite_size.get()), color=(0, 0, 255), thickness=1)
 
@@ -107,11 +114,11 @@ class Video2Spritesheet:
             if i == len(frames) or i > end_frame.get():
                 i = 0
 
-        output = cv.VideoWriter("output/" + ofile,
-                                cv.VideoWriter_fourcc(*'mp4v'), 20.0, (owidth, oheight))
-        for frame in frames:
-            output.write(frame)
-        output.release()
+        for i in range(start_frame.get(), end_frame.get()+1):
+            frame = self.mutate(frames[i])
+            frame = frame[sprite_pos_x.get():sprite_pos_x.get(
+            )+sprite_size.get(), sprite_pos_y.get():sprite_pos_y.get()+sprite_size.get()]
+            cv.imwrite("output/" + name + "_" + str(i) + ".png", frame)
 
         cv.destroyAllWindows()
 
